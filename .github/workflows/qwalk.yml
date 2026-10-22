@@ -1,0 +1,41 @@
+# 강호풍운록 퀘스트 걸어서 진행 시험(헤드리스) — 손으로 부를 때만 돎(gh workflow run qwalk.yml -f job=<이름>)
+# 게임 묶음·시험 스크립트는 저장소에 없음: Kaggle 비공개 데이터(wuxia-qwalk-lean5 · wuxia-qwalk-jobs)에서 받아 씀
+name: qwalk
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "시험 이름(wuxia-qwalk-jobs 데이터 안 run_<이름>.py)"
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      - name: 준비(게임 묶음·시험 받기)
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          JOB: ${{ inputs.job }}
+        run: |
+          [[ "$JOB" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "시험 이름이 이상함"; exit 1; }
+          pip install --quiet kaggle==2.2.4
+          sudo mkdir -p /kaggle/input/lean /kaggle/input/jobs /kaggle/working
+          sudo chown -R "$USER" /kaggle
+          kaggle datasets download robbin0707/wuxia-qwalk-lean5 -p /kaggle/input/lean --unzip
+          kaggle datasets download robbin0707/wuxia-qwalk-jobs -p /kaggle/input/jobs --unzip
+          ls -la /kaggle/input/lean /kaggle/input/jobs
+          cp "/kaggle/input/jobs/run_$JOB.py" /tmp/run.py
+          rm -f /kaggle/input/jobs/run_*.py
+          nproc; free -g | head -2; df -h /tmp | tail -1
+      - name: 시험
+        run: python3 /tmp/run.py
+      - name: 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.job }}
+          path: /kaggle/working
+          retention-days: 2
+          if-no-files-found: warn
